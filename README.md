@@ -1,91 +1,177 @@
-# Xona TSA
+# Xona TSA : Application Flutter
 
-Application mobile Flutter (Android & iOS) permettant aux organisateurs
-événementiels de créer, gérer et vendre directement dans l'app des tickets
-numériques à des participants.
+Application mobile Xona TSA : decouverte, creation et gestion d'evenements,
+billetterie numerique (Participant / Organisateur evenementiel).
 
-Éditeur : **Trillion Software**
+> **Etat de ce livrable.** Ce depot contient une base Flutter fonctionnelle
+> et le squelette d'architecture demande (Loading → Demarrage →
+> Authentification → Conditions → Selection du role → Parametres), avec
+> Firebase Authentication, Firestore et le systeme de feedback tactile
+> global deja implementes.
+>
+> **Les dossiers natifs `android/` et `ios/` ne sont PAS inclus.**
+> Ils doivent etre generes localement par la commande `flutter create .`
+> (etape 1 ci-dessous) car ce sont des fichiers volumineux, generes par
+> outillage (Gradle, Xcode/CocoaPods...), qu'il n'est pas fiable de
+> reconstruire a la main sans le SDK Flutter pour les valider. La commande
+> les regenere en 30 secondes sur votre machine, sans toucher au dossier
+> `lib/` deja fourni.
 
-## Stack technique
+---
 
-- **Flutter / Dart** — génère les applications Android et iOS à partir du
-  même code.
-- **Firebase** — authentification et backend.
-- **Firestore** — base de données (comptes utilisateurs, profils, pays,
-  événements, tickets).
-- **Firebase Cloud Functions** — pont sécurisé vers l'API WhatsApp Business
-  Cloud (aucun secret/token/clé API côté frontend).
+## 1. Installation de Flutter
 
-## Structure du projet
+1. Installez le SDK Flutter : https://docs.flutter.dev/get-started/install
+2. Verifiez l'installation :
+   ```bash
+   flutter doctor
+   ```
+
+## 2. Recuperer ce projet et generer les dossiers natifs
+
+```bash
+cd xona_tsa
+flutter create . --project-name xona_tsa --org com.xonatsa
+```
+
+Cette commande cree `android/` et `ios/` sans ecraser `lib/`, `pubspec.yaml`
+ni les autres fichiers deja presents.
+
+## 3. Installer les dependances
+
+```bash
+flutter pub get
+```
+
+## 4. Configuration Firebase
+
+1. Creez un projet sur https://console.firebase.google.com
+2. Installez la FlutterFire CLI :
+   ```bash
+   dart pub global activate flutterfire_cli
+   ```
+3. Connectez le projet :
+   ```bash
+   flutterfire configure
+   ```
+   Cette commande remplace automatiquement le fichier placeholder
+   `lib/firebase_options.dart` par vos vraies cles, et telecharge :
+   - `android/app/google-services.json`
+   - `ios/Runner/GoogleService-Info.plist`
+
+   Ces deux fichiers sont volontairement absents de ce depot et listes
+   dans `.gitignore` : ne les committez jamais publiquement.
+
+## 5. Activer Firebase Authentication
+
+Dans la console Firebase → **Authentication → Sign-in method**, activez :
+- **E-mail/Mot de passe**
+- **Google**
+
+## 6. Configuration Google Sign-In
+
+- Android : renseignez le SHA-1 (et SHA-256) de votre certificat de debug
+  et de release dans la console Firebase (Parametres du projet → vos apps
+  Android).
+- iOS : ajoutez le `REVERSED_CLIENT_ID` (present dans
+  `GoogleService-Info.plist`) comme URL Scheme dans Xcode
+  (Runner → Info → URL Types).
+
+## 7. Configuration Firestore
+
+1. Console Firebase → **Firestore Database** → Creer la base (mode production).
+2. Deployez les regles de securite fournies :
+   ```bash
+   firebase deploy --only firestore:rules
+   ```
+   (le fichier `firestore.rules` est a la racine du projet ; necessite
+   `firebase-tools` : `npm install -g firebase-tools`, puis `firebase init`
+   pour lier le projet si ce n'est pas deja fait).
+
+Collections prevues : `users`, `events`, `tickets`, `orders`, `organizers`,
+`participants`, `app_settings`, `legal_documents`.
+
+## 8. Lancer sur Android
+
+```bash
+flutter run
+```
+
+## 9. Preparation iOS
+
+```bash
+cd ios && pod install && cd ..
+flutter run
+```
+(necessite un Mac avec Xcode installe).
+
+## 10. Remplacement des placeholders Firebase
+
+Apres `flutterfire configure` (etape 4), verifiez que
+`lib/firebase_options.dart` ne contient plus les valeurs
+`PLACEHOLDER_...` mais vos vraies valeurs `apiKey`, `appId`, etc.
+
+## 11. Generer un APK / AAB (Android)
+
+```bash
+flutter build apk --release
+# ou pour le Play Store :
+flutter build appbundle --release
+```
+
+## 12. Generer un build iOS
+
+```bash
+flutter build ios --release
+```
+Puis archivez via Xcode pour publier sur l'App Store.
+
+---
+
+## Architecture du projet
 
 ```
 lib/
-  main.dart
-  screens/
-    splash_screen.dart
-    connexion_page.dart
-    loading_page.dart
-    choix_profil_page.dart   (placeholder)
-assets/
-  images/
-    splash_01.png
-    connect.jpg
-    loadingpage_01.png
+  main.dart                 # point d'entree, init Firebase
+  firebase_options.dart     # PLACEHOLDER, regenere par flutterfire configure
+  app/
+    app.dart                # MaterialApp, theme, routes
+    app_router.dart         # noms de routes
+  core/
+    theme/app_theme.dart    # couleurs (noir/blanc + bleu organisateur), ThemeData
+    widgets/touch_ripple.dart  # systeme global de feedback tactile (ripple)
+  models/
+    app_user.dart
+    user_role.dart
+  services/
+    auth_service.dart       # Firebase Authentication (email, Google, reset)
+    user_repository.dart    # lecture/ecriture Firestore collection `users`
+  features/
+    onboarding/
+      splash_page.dart      # Page 1, Loading
+      start_page.dart       # Page de demarrage
+    authentication/
+      login_page.dart
+      signup_page.dart
+      forgot_password_page.dart
+      terms_page.dart       # Conditions d'utilisation (acceptation obligatoire)
+    role_selection/
+      role_selection_page.dart  # Participant / Organisateur (bleu si selectionne)
+    settings/
+      settings_page.dart
+test/
+  role_selection_test.dart
+firestore.rules
 ```
 
-> Chaque fichier ci-dessus doit être créé dans le repo au chemin exact
-> indiqué en commentaire en haut du fichier. Sur GitHub, utilise
-> "Add file → Create new file" et tape le chemin complet
-> (ex. `lib/screens/splash_screen.dart`) : GitHub crée les dossiers
-> automatiquement.
+## Ce qui reste a construire
 
-## Dépendances (`pubspec.yaml`)
+Conformement au principe « ne pas inventer de fonctionnalites metier non
+demandees », les ecrans suivants ne sont pas encore implementes et
+peuvent etre ajoutes dans les memes dossiers `features/` :
+- Tableau de bord Organisateur (creation/gestion d'evenements)
+- Decouverte d'evenements et achat de billets (Participant)
+- Modeles `Event`, `Ticket`, `Order` et repositories associes
 
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  firebase_core: ^3.6.0
-
-flutter:
-  assets:
-    - assets/images/splash_01.png
-    - assets/images/connect.jpg
-    - assets/images/loadingpage_01.png
-```
-
-Ajoute aussi `firebase_options.dart` (généré par `flutterfire configure`)
-et connecte le projet Firebase avant de lancer l'app.
-
-## Parcours implémenté jusqu'ici
-
-1. **Splash Screen** (`splash_screen.dart`) — affiche `splash_01.png`
-   pendant 1 seconde, puis bascule automatiquement vers la connexion.
-2. **Connexion** (`connexion_page.dart`) — formulaire e-mail / mot de
-   passe, "Se souvenir de moi", "Mot de passe oublié ?", "Se connecter",
-   "Créer un compte". Le bouton "Se connecter" ouvre la page de chargement.
-3. **Chargement** (`loading_page.dart`) — affiche `loadingpage_01.png`
-   pendant que l'app vérifie les données utilisateur, puis route vers
-   la suite du parcours.
-4. **Choix du profil** (`choix_profil_page.dart`) — *placeholder*,
-   en attente de la maquette (Participant / Organisateur).
-
-## Parcours prévu (à venir)
-
-Politique de confidentialité → Choix du profil (Participant/Organisateur)
-→ Choix du pays (obligatoire, une seule fois) → Participant : choix du
-type d'événement puis liste des événements ; Organisateur : espace dédié.
-
-Deux flux OTP WhatsApp séparés sont prévus : création de compte et
-récupération de mot de passe, tous deux relayés via Firebase Cloud
-Functions.
-
-## À faire
-
-- Brancher l'authentification Firebase réelle sur `connexion_page.dart`.
-- Construire les pages : Création de compte, Mot de passe oublié,
-  Vérification OTP (x2), Nouveau mot de passe, Politique de
-  confidentialité, Choix du profil, Choix du pays, Choix du type
-  d'événement, Liste des événements, espace Organisateur.
-- Générer `firebase_options.dart` avec FlutterFire et connecter le
-  projet Firebase.
+L'architecture (routes, services, theme, systeme de ripple) est prevue
+pour accueillir ces ecrans sans refonte.

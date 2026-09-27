@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Un utilisateur ne peut lire/modifier que son propre document.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // Evenements : lecture publique aux utilisateurs connectes,
+    // ecriture reservee au createur (organizerId).
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.organizerId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.organizerId == request.auth.uid;
+    }
+
+    // Billets : un participant ne voit que ses propres billets.
+    match /tickets/{ticketId} {
+      allow read: if isSignedIn()
+        && resource.data.participantId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // Documents legaux : lecture publique, ecriture interdite cote client.
+    match /legal_documents/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Tout le reste est refuse par defaut.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
